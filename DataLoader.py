@@ -5,6 +5,10 @@ Created on Thu Nov  5 14:35:51 2020
 @author: callum
 """
 
+import random
+import numpy as np
+import math
+
 #loads the classification dataset and splits the dataset into its corresponding features and output
 def load_dataset(file, batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_x6, output_list):
     my_file = open(file, "r")
@@ -83,6 +87,30 @@ def column_stack_inputs(batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_
         
     return dataset
 
+# Jumbles the data up
+def jumble_dataset(dataset_x, dataset_y):
+    
+    new_dataset_x = [None] * len(dataset_x)
+    new_dataset_y = [None] * len(dataset_y)
+    
+    for i in range(len(dataset_x)):
+        insertion_index = random.randint(0, len(dataset_x) - 1)
+        is_not_inserted = True
+        
+        while is_not_inserted:
+            if insertion_index >= len(dataset_x):
+                insertion_index = 0
+            
+            if new_dataset_x[insertion_index] is None:
+                new_dataset_x[insertion_index] = dataset_x[i]
+                new_dataset_y[insertion_index] = dataset_y[i]
+                is_not_inserted = False
+            
+            else:
+                insertion_index = insertion_index + 1
+    
+    return [new_dataset_x, new_dataset_y]
+
 # Column stacks the inputs and splits the data into testing and training datasets
 def split_testing_training(testing_proportion, batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_x6, output_y, multi_output_y):
     
@@ -145,4 +173,26 @@ def split_testing_training(testing_proportion, batch_x1, batch_x2, batch_x3, bat
     testing_set_y = testing_set_y + vgood_set_y[:split_i]
     training_set_y = training_set_y + vgood_set_y[split_i:]
     
-    return [testing_set_x, testing_set_y, training_set_x, training_set_y]
+    jumbled_testing = jumble_dataset(testing_set_x, testing_set_y)
+    jumbled_training = jumble_dataset(training_set_x, training_set_y)
+    
+    return [jumbled_testing[0], jumbled_testing[1], jumbled_training[0], jumbled_training[1]]
+
+def split_dataset_to_folds(folds, batch_x, batch_y):
+     
+    jumbled_dataset = jumble_dataset(batch_x, batch_y)
+    
+    dataset_chunks_x = list()
+    dataset_chunks_y = list()
+
+    dataset_x = jumbled_dataset[0]
+    dataset_y = jumbled_dataset[1]
+
+    jump = math.floor(len(batch_x) / folds)
+
+    for i in range(folds):
+        ind = i * jump
+        dataset_chunks_x.append(dataset_x[ind:ind + jump])
+        dataset_chunks_y.append(dataset_y[ind:ind + jump])
+        
+    return [dataset_chunks_x, dataset_chunks_y]

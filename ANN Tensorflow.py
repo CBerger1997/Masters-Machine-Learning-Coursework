@@ -16,14 +16,16 @@ tf.disable_v2_behavior()
 
 #Network parameters
 n_hidden1 = 100
-n_hidden2 = 10
+n_hidden2 = 40
 n_input = 6
 n_output = 4
 #Learning parameters
-learning_constant = 0.001
-number_epochs = 1000000
+learning_constant = 0.1
+number_epochs = 500
 #1,000,000,000
-batch_size = 1728
+batch_size = 1
+
+cross_val_folds = 10
 
 #Defining the input and the output
 X = tf.placeholder(tf.float32, [None, n_input])
@@ -48,6 +50,8 @@ batch_x3 = [] # doors feature
 batch_x4 = [] # persons feature
 batch_x5 = [] # lug boot feature
 batch_x6 = [] # safety feature
+
+batch_x = [] # Features
 
 output_y = [] # All outputs
 
@@ -81,23 +85,45 @@ for data in output_y:
     
 multi_output_y = np.array(multi_output_y) # Convert list to numpy array
 
-dataset = DataLoader.split_testing_training(0.4, batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_x6, output_y, multi_output_y)  
-
 label_y=multi_output_y
 batch_x=np.column_stack((batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_x6))
 batch_y=multi_output_y
-batch_x_train=np.row_stack(dataset[2])
-batch_y_train=np.row_stack(dataset[3])
-batch_x_test=np.row_stack(dataset[0])
-batch_y_test=np.row_stack(dataset[1])
+
+# Used to create fixed dataset for hyperparameter optimisation
+#dataset = DataLoader.split_testing_training(0.4, batch_x1, batch_x2, batch_x3, batch_x4, batch_x5, batch_x6, output_y, multi_output_y)  
+
+#batch_x_train=np.row_stack(dataset[2])
+#batch_y_train=np.row_stack(dataset[3])
+#batch_x_test=np.row_stack(dataset[0])
+#batch_y_test=np.row_stack(dataset[1])
+
+#Used to set up cross fold validation
+fold_split_dataset = DataLoader.split_dataset_to_folds(cross_val_folds, batch_x, batch_y)
+split_batch_x = fold_split_dataset[0]
+split_batch_y = fold_split_dataset[1]
+
 
 with tf.Session() as sess:
     sess.run(init)
     pred = (neural_network) # Apply softmax to logits
+    #temp_output = pred.eval({X: batch_x_train, Y: batch_y_train})
     accuracy=tf.keras.losses.MSE(pred,Y)
     #Training epoch
     for epoch in range(number_epochs):
-
+        for fold in range(0, cross_val_folds):
+            batch_x_train = []
+            batch_y_train = []
+            for count, val in enumerate(split_batch_x):
+                if count!=fold:
+                    batch_x_train += val
+            for count, val in enumerate(split_batch_y):
+                if count!=fold:
+                    batch_y_train += val
+            batch_x_train=np.row_stack(batch_x_train)
+            batch_y_train=np.row_stack(batch_y_train)
+            batch_x_test=np.row_stack(split_batch_x[fold])
+            batch_y_test=np.row_stack(split_batch_y[fold])
+        
             sess.run(optimizer, feed_dict={X: batch_x_train, Y: batch_y_train})
             #Display the epoch
             if epoch % 100 == 0:
@@ -111,13 +137,15 @@ with tf.Session() as sess:
 
     print("Prediction:", pred.eval({X: batch_x_test}), file=open("Prediction.txt", "a"))
     output=tf.argmax(neural_network.eval({X: batch_x_test}),1)
-    output = output.eval({X: batch_x, Y: batch_y_train})
+    output = output.eval()
+    plot_y = tf.argmax(batch_y_test, 1)
+    plot_y = plot_y.eval()
     plt.yticks(range(0, 4))
-    plt.plot(batch_y_test, 'rs', markersize=3.0)
+    plt.plot(plot_y, 'rs', markersize=3.0)
     plt.plot(output, 'bo', markersize=1.0)
     plt.ylabel('Class')
     plt.show()
     
     correct_prediction1 = tf.equal(tf.argmax(pred, 1),output_y)
     accuracy1 = tf.reduce_mean(tf.cast(correct_prediction1, tf.float32))
-    print(accuracy1.eval({X: batch_x}))
+    print(accuracy1.eval({X: batch_x})* 100)
